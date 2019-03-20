@@ -19,6 +19,7 @@ The installation of the module can be customized with the module.cfg file and sh
 
 ## Setup
 After defining the specific paths for the module in the module.cfg file the installer works if the following requirements are met:
+
     - The **module.cfg** file must be present at the same folder level as the installer but is optional.
     - The module to be installed must be located within the **modules** folder which has to be present at the same folder level as the installer as well.
     - The license file with the name **LICENSE** also has to be present alongside the installer but is optional.
@@ -27,6 +28,7 @@ Folder structure:
     - module.cfg
     - installation script/s
     - modules/moduleName/moduleContent
+    
 See the folder structure in the sampleModule folder.
 
 This structure has been chosen to make the locations of the module and folders obvious even when the installer is not being used. The topmost modules folder should hint that a module usually always goes to a folder named 'modules' within the Maya search paths. Within the 'modules' folder is the module folder which carries the name of the module. The installer takes the name of this folder to execute the installation. The module folder itself contains all the elements for the module: icons, plug-ins, scripts. The installer checks for the existance of the plug-ins folder which triggers how the module is defined. Usually, when plug-ins are present, it's necessary to setup version dependent module definitions. If the plug-ins folder is missing only a general module gets defined which can be loaded by all versions of Maya.
