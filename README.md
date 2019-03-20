@@ -23,7 +23,9 @@ After defining the specific paths for the module in the module.cfg file the inst
     - The **module.cfg** file must be present at the same folder level as the installer but is optional.
     - The module to be installed must be located within the **modules** folder which has to be present at the same folder level as the installer as well.
     - The license file with the name **LICENSE** also has to be present alongside the installer but is optional.
+    
 Folder structure:
+
     - LICENSE (optional)
     - module.cfg
     - installation script/s
