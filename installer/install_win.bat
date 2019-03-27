@@ -8,7 +8,7 @@
 : ----------------------------------------------------------------------
 
 set copyright=Copyright (c) 2019 Ingo Clemens, brave rabbit
-set installerVersion=0.6.0-190320
+set installerVersion=0.7.0-190326
 
 :: The name automatically gets defined throught the name of the module.
 set name=
@@ -31,7 +31,10 @@ set customPath=
 
 set modulePath=C:\Users\$USER\Documents\maya\modules
 set factoryPath=C:\Program_Files\Autodesk\Maya$VERSION\modules;C:\Users\$USER\Documents\maya\$VERSION\modules;C:\Users\$USER\Documents\maya\modules;C:\Program_Files\Common_Files\Alias_Shared\Modules\maya\$VERSION;C:\Program_Files\Common_Files\Alias_Shared\Modules\maya;C:\Program_Files\Common_Files\Autodesk_Shared\Modules\maya\$VERSION
-set customPathFile=%TEMP%\moduleInstaller
+set installPathFile=%TEMP%\moduleInstaller
+
+set installPathList=%modulePath%
+set "installPathList=%installPathList:$USER=!USERNAME!%"
 
 
 :: ---------------------------------------------------------------------
@@ -99,12 +102,25 @@ if not "%MAYA_APP_DIR%" == "" (
 :: Check if the file exists which contains all previously used custom
 :  install paths. Add all previous paths to the factory path array to
 :  search for previous installations.
-set customPathFileExists=0
-if exist %customPathFile% (
-    for /f "tokens=* delims=" %%l in (%customPathFile%) do (
-        set factoryPath=%factoryPath%;%%l
+:  Also, create a list of all custom install paths to be able to give
+:  the user an option to choose from previously used paths during the
+:  custom installation.
+set installPathFileExists=0
+set installPathListCount=0
+set savedCustomPath=
+if exist %installPathFile% (
+    for /f "tokens=* delims=" %%l in (%installPathFile%) do (
+        set pathItem=%%l\
+        set "pathItem=!pathItem: \=!"
+        set "pathItem=!pathItem: =_!"
+        set factoryPath=!factoryPath!;!pathItem!
+        set installPathList=!installPathList!;!pathItem!
+        if !installPathListCount! == 0 (
+            set savedCustomPath=%%l
+        )
+        set /a installPathListCount+=1
     )
-    set customPathFileExists=1
+    set installPathFileExists=1
 )
 
 call :logStatus "MAYA_APP_DIR : %MAYA_APP_DIR%"
@@ -177,7 +193,7 @@ call :logStatus "Module has plug-in : %includePlugin%"
 :  Display the license, if any and cancel the installation if the
 :  license doesn't get accepted.
 
-echo This program installs the %name% plug-in for Autodesk Maya.
+echo This program installs %name% for Autodesk Maya.
 echo.
 
 :checkInputStart
@@ -217,6 +233,8 @@ if !confirm! == 1 (
         if !confirm! == 0 (
             call :cancelInstall
         )
+
+        echo.
     )
 
 ) else (
@@ -230,7 +248,6 @@ if !confirm! == 1 (
 :: The path the module file is saved to.
 set moduleFilePath=""
 
-echo.
 echo.
 echo Installation type:
 echo    1. Simple
@@ -282,9 +299,9 @@ for %%v in (!mayaVersion!) do (
         set "modPath=!modPath:$VERSION=%%v!"
         set "modPath=!modPath:$USER=%USERNAME%!"
 
-        call :logStatus "Searching default path : !modPath!"
-
         set "modPath=!modPath:_= !"
+
+        call :logStatus "Searching default path : !modPath!"
 
         :: Check if the current path already has been processed in case
         :  of non version specific paths.
@@ -300,15 +317,15 @@ for %%v in (!mayaVersion!) do (
         :: Check if the module exists in one of the default locations.
         set modFile=!modPath!\%name%.mod
         if exist !modFile! if !processed! == 0 (
-            call :logStatus "Existing module file : !modFile!"
+            call :logStatus "Found existing module file : !modFile!"
             :: Check where the module file points to.
             :  Get the content of the .mod file and parse the first
             :  line. The last item is the location of the module folder.
             set line=
             set lineSet=0
-            for /f "tokens=* delims=\n" %%l in (!modFile!) do (
+            for /f "USEBACKQtokens=* delims=\n" %%l in ("!modFile!") do (
                 :: There doesn't seem to be an easy way to break from a
-                :  loop. Therefore the lineSet is used to mark that the
+                :  loop. Therefore lineSet is used to mark that the
                 :  first line has been processed.
                 if !lineSet! == 0 (
                     set line=%%l
@@ -430,7 +447,12 @@ for %%v in (!mayaVersion!) do (
                 if !confirm! == 1 (
                     set doBackup=1
                     call :getTimeStamp
-                    call :getBackupPath !modDir!
+
+                    set pathString=!modDir!
+                    set "pathString=!pathString: =$!"
+                    call :getBackupPath !pathString!
+
+
                     set backupPath=!backupPath!\%name%_!timestamp!
                     set backupFile=!modFile!
                     set backupDir=!modDir!
@@ -464,6 +486,14 @@ if %installOption% == 2 (
 :  setup the module content path
 :  ---------------------------------------------------------------------
 
+:  If the custom install option has been chosen check if previous user
+:  defined paths have been saved. In this case use the first stored path
+:  as the default path for the installation.
+if %installPathFileExists% == 1 if %installPathListCount% gtr 0 if %installOption% == 2 (
+    set modulePath=%savedCustomPath%
+    call :logStatus "Module path using stored custom path : !modulePath!"
+)
+
 set "modulePath=!modulePath:$USER=%USERNAME%!"
 if %deleteOption% == 0 (
     echo The module will be installed in:
@@ -474,6 +504,7 @@ set moduleFilePath=%modulePath%
 
 if %installOption% == 1 (
     if %doDelete% == 1 (
+        echo.
         echo A previous installation has been detected and will be deleted.
     )
 
@@ -508,54 +539,95 @@ if %installOption% == 1 (
         for %%i in (y Y) do if %%i == !input! set confirm=1
 
         if !confirm! == 0 (
-            echo.
-            set /p input="Please enter a custom install path: "
-            set userDefinedPath=!input!
-            :: It's not possible to query if the input was empty when
-            :  the return key was pressed because it doesn't qualify as
-            :  being empty. Therefore the check is performed the other
-            :  way around.
-            if "!input!" == "" (
+            set needsPathInput=1
+
+            :: In case the file exists which contains the previous install
+            :  paths display these as a list the user can choose from.
+            if %installPathFileExists% == 1 (
                 echo.
-                echo Error: No path provided for the installation.
-                call :logStatus "Error: No path provided for the installation."
-                call :cancelInstall
-            ) else (
-                call :logStatus "User defined install path : !userDefinedPath!"
-                :: Check if the entered path is valid
-                if not exist "!input!\*" (
-                    echo.
-                    echo The path does not exist.
-                    echo.
+                echo Previous install paths:
+                set count=1
+                for %%i in (!installPathList!) do (
+                    set listItem=%%i
+                    set "listItem=!listItem:_= !"
+                    echo     !count!. !listItem!
+                    set /a count+=1
+                )
+                echo     !count!. New path
+                echo.
+                set /p input="Please enter choice [1-!count!]: "
 
-                    :checkCreatPath
-                    set /p input="Do you want to create it? [y/n]: "
-                    if not !input! == y if not !input! == Y if not !input! == n if not !input! == N (
-                        call :wrongInput
-                        goto :checkCreatPath
+                if !input! lss !count! (
+                    set count=1
+                    for %%i in (!installPathList!) do (
+                        if !count! == !input! (
+                            set listItem=%%i
+                            set "listItem=!listItem:_= !"
+                            set modulePath=!listItem!
+                            call :logStatus "User defined install path : !listItem!"
+                            set needsPathInput=0
+                        )
+                        set /a count+=1
                     )
-
-                    set confirm=0
-                    for %%i in (y Y) do if %%i == !input! set confirm=1
-
-                    if !confirm! == 1 (
-                        md !userDefinedPath!
-                        call :logStatus "Created folder : !userDefinedPath!"
+                ) else (
+                    if !input! == !count! (
+                        set needsPathInput=1
                     ) else (
-                        echo.
-                        echo Error: No valid path provided for the installation.
-                        call :logStatus "Error: No valid path provided for the installation."
                         call :cancelInstall
                     )
                 )
-                set modulePath=!userDefinedPath!
+            )
 
-                if %customPathFileExists% == 1 (
-                    echo !userDefinedPath! >> %customPathFile%
+            if !needsPathInput! == 1 (
+                echo.
+                set /p input="Please enter a custom install path: "
+                set userDefinedPath=!input!
+                :: It's not possible to query if the input was empty when
+                :  the return key was pressed because it doesn't qualify as
+                :  being empty. Therefore the check is performed the other
+                :  way around.
+                if "!input!" == "" (
+                    echo.
+                    echo Error: No path provided for the installation.
+                    call :logStatus "Error: No path provided for the installation."
+                    call :cancelInstall
                 ) else (
-                    echo !userDefinedPath! > %customPathFile%
+                    call :logStatus "User defined install path : !userDefinedPath!"
+                    :: Check if the entered path is valid
+                    if not exist "!input!\*" (
+                        echo.
+                        echo The path does not exist.
+                        echo.
+
+                        :checkCreatPath
+                        set /p input="Do you want to create it? [y/n]: "
+                        if not !input! == y if not !input! == Y if not !input! == n if not !input! == N (
+                            call :wrongInput
+                            goto :checkCreatPath
+                        )
+
+                        set confirm=0
+                        for %%i in (y Y) do if %%i == !input! set confirm=1
+
+                        if !confirm! == 1 (
+                            md "!userDefinedPath!"
+                            call :logStatus "Created folder : !userDefinedPath!"
+                        ) else (
+                            echo.
+                            echo Error: No valid path provided for the installation.
+                            call :logStatus "Error: No valid path provided for the installation."
+                            call :cancelInstall
+                        )
+                    )
+                    set modulePath=!userDefinedPath!
+
+                    if %installPathFileExists% == 1 (
+                        echo !userDefinedPath! >> %installPathFile%
+                    ) else (
+                        echo !userDefinedPath! > %installPathFile%
+                    )
+                    call :logStatus "Added user defined path !userDefinedPath! to %installPathFile%"
                 )
-                call :logStatus "Added user defined path !userDefinedPath! to %customPathFile%"
             )
         )
     )
@@ -587,55 +659,96 @@ if %installOption% == 2 if %deleteOption% == 0 (
     for %%i in (y Y) do if %%i == !input! set confirm=1
 
     if !confirm! == 0 (
-        echo.
-        set /p input="Please enter a custom path for the module file: "
-        set userDefinedModuleFilePath=!input!
-        :: It's not possible to query if the input was empty when
-        :  the return key was pressed because it doesn't qualify as
-        :  being empty. Therefore the check is performed the other
-        :  way around.
-        if "!input!" == "" (
+        set needsPathInput=1
+
+        :: In case the file exists which contains the previous install
+        :  paths display these as a list the user can choose from.
+        if %installPathFileExists% == 1 (
             echo.
-            echo Error: No module file path provided for the installation.
-            call :logStatus "Error: No module file path provided for the installation."
-            call :cancelInstall
-        ) else (
-            call :logStatus "User defined module file path : !userDefinedModuleFilePath!"
-            :: Check if the entered path is valid
-            if not exist "!input!\*" (
-                echo.
-                echo The path does not exist.
-                echo.
+            echo Previous install paths:
+            set count=1
+            for %%i in (!installPathList!) do (
+                set listItem=%%i
+                set "listItem=!listItem:_= !"
+                echo     !count!. !listItem!
+                set /a count+=1
+            )
+            echo     !count!. New path
+            echo.
+            set /p input="Please enter choice [1-!count!]: "
 
-                :checkCreatPath
-                set /p input="Do you want to create it? [y/n]: "
-                if not !input! == y if not !input! == Y if not !input! == n if not !input! == N (
-                    call :wrongInput
-                    goto :checkCreatPath
+            if !input! lss !count! (
+                set count=1
+                for %%i in (!installPathList!) do (
+                    if !count! == !input! (
+                        set listItem=%%i
+                        set "listItem=!listItem:_= !"
+                        set moduleFilePath=!listItem!
+                        call :logStatus "User defined module file path : !listItem!"
+                        set needsPathInput=0
+                    )
+                    set /a count+=1
                 )
-
-                set confirm=0
-                for %%i in (y Y) do if %%i == !input! set confirm=1
-
-                if !confirm! == 1 (
-                    md !userDefinedModuleFilePath!
-                    call :logStatus "Created folder : !userDefinedModuleFilePath!"
+            ) else (
+                if !input! == !count! (
+                    set needsPathInput=1
                 ) else (
-                    echo.
-                    echo Error: No valid module file path provided for the installation.
-                    call :logStatus "Error: No valid module file path provided for the installation."
                     call :cancelInstall
                 )
             )
-            set moduleFilePath=!userDefinedModuleFilePath!
+        )
 
-            if !modulePath! neq !moduleFilePath! (
-                if %customPathFileExists% == 1 (
-                    echo !userDefinedPath! >> %customPathFile%
-                ) else (
-                    echo !userDefinedPath! > %customPathFile%
+        if !needsPathInput! == 1 (
+            echo.
+            set /p input="Please enter a custom path for the module file: "
+            set userDefinedModuleFilePath=!input!
+            :: It's not possible to query if the input was empty when
+            :  the return key was pressed because it doesn't qualify as
+            :  being empty. Therefore the check is performed the other
+            :  way around.
+            if "!input!" == "" (
+                echo.
+                echo Error: No module file path provided for the installation.
+                call :logStatus "Error: No module file path provided for the installation."
+                call :cancelInstall
+            ) else (
+                call :logStatus "User defined module file path : !userDefinedModuleFilePath!"
+                :: Check if the entered path is valid
+                if not exist "!input!\*" (
+                    echo.
+                    echo The path does not exist.
+                    echo.
+
+                    :checkCreatPath
+                    set /p input="Do you want to create it? [y/n]: "
+                    if not !input! == y if not !input! == Y if not !input! == n if not !input! == N (
+                        call :wrongInput
+                        goto :checkCreatPath
+                    )
+
+                    set confirm=0
+                    for %%i in (y Y) do if %%i == !input! set confirm=1
+
+                    if !confirm! == 1 (
+                        md "!userDefinedModuleFilePath!"
+                        call :logStatus "Created folder : !userDefinedModuleFilePath!"
+                    ) else (
+                        echo.
+                        echo Error: No valid module file path provided for the installation.
+                        call :logStatus "Error: No valid module file path provided for the installation."
+                        call :cancelInstall
+                    )
                 )
-                call :logStatus "Added user defined path !userDefinedPath! to %customPathFile%"
+                set moduleFilePath=!userDefinedModuleFilePath!
+
+                if !modulePath! neq !moduleFilePath! (
+                    if %installPathFileExists% == 1 (
+                        echo !userDefinedModuleFilePath! >> %installPathFile%
+                    ) else (
+                        echo !userDefinedModuleFilePath! > %installPathFile%
+                    )
+                    call :logStatus "Added user defined path !userDefinedModuleFilePath! to %installPathFile%"
+                )
             )
         )
     )
@@ -646,8 +759,9 @@ if %installOption% == 2 if %deleteOption% == 0 (
 :  ---------------------------------------------------------------------
 
 if %doDelete% == 1 (
-    del /s /q !deleteFile!
-    rmdir /s /q !deleteDir!
+    echo.
+    del /s /q "!deleteFile!"
+    rmdir /s /q "!deleteDir!"
 
     echo.
     echo Deleted previous module:
@@ -661,11 +775,11 @@ if %doDelete% == 1 (
     :  Backup old files
     :  -----------------------------------------------------------------
     if %doBackup% == 1 (
-        md !backupPath!
-        xcopy /s !backupDir! !backupPath!\%name%\
-        move !backupFile! !backupPath!
+        md "!backupPath!"
+        xcopy /s "!backupDir!" "!backupPath!\%name%\"
+        move "!backupFile!" "!backupPath!"
 
-        rmdir /s /q !backupDir!
+        rmdir /s /q "!backupDir!"
 
         echo.
         echo Moved old files to:
@@ -683,20 +797,36 @@ if %deleteOption% == 1 (
 :  ---------------------------------------------------------------------
 
 if not exist !moduleFilePath! (
-    md !moduleFilePath!
+    md "!moduleFilePath!"
     call :logStatus "Created module path : !moduleFilePath!"
 ) else (
     call :logStatus "Using existing module path : !moduleFilePath!"
 )
-call :writeModuleFile !moduleFilePath!\%name%.mod
 
 echo.
-xcopy /s !moduleBase! !modulePath!\%name%\
+echo Writing module file...
+
+set moduleFilePath=!moduleFilePath!\%name%.mod
+set moduleFilePath=!moduleFilePath: \=\!
+set moduleFilePath=!moduleFilePath: =_!
+call :writeModuleFile !moduleFilePath!
+
+echo ... Done
+
+echo.
+echo Copying files...
+
+set modulePath=!modulePath!\%name%\
+set modulePath=!modulePath: \=\!
+echo.
+xcopy /s !moduleBase! "!modulePath!"
+
+echo ... Done
 
 echo.
 echo Installed module to:
-echo !modulePath!\%name%
-call :logStatus "Installed module to : !modulePath!\%name%"
+echo !modulePath!
+call :logStatus "Installed module to : !modulePath!"
 
 call :finishInstall
 
@@ -707,7 +837,8 @@ call :finishInstall
 
 :finishInstall
 echo.
-echo Installation log saved to: %logfile%
+echo Installation log saved to:
+echo %logfile%
 echo.
 echo ----------------------- Installation complete ------------------------
 echo.
@@ -719,7 +850,8 @@ exit
 
 :cancelInstall
 echo.
-echo Installation log saved to: %logfile%
+echo Installation log saved to:
+echo %logfile%
 echo.
 echo ----------------------- Installation cancelled ------------------------
 echo.
@@ -832,60 +964,63 @@ goto :eof
 
 
 :writeModuleFile
-call :logStatus "Begin writing module file : %1"
+set fileName=%1
+set fileName=!fileName:_= !
+call :logStatus "Begin writing module file : %fileName%"
 :: Clear the module file if it exists.
-break > %1
-set "modulePath=!modulePath:$USER=%USERNAME%!"
+break > "%fileName%"
+set "pathString=!modulePath:$USER=%USERNAME%!\!name!"
+set "pathString=!pathString: \=\!"
 if !includePlugin! == 1 (
     for %%v in (!mayaVersion!) do (
-        echo + MAYAVERSION:%%v !name! !pluginVersion! !modulePath!\!name! >> %1
+        echo + MAYAVERSION:%%v !name! !pluginVersion! !pathString! >> "%fileName%"
         if "!iconPath!" neq "" (
-            echo icons: !iconPath! >> %1
+            echo icons: !iconPath! >> "%fileName%"
         )
         if "!pluginPath!" neq "" (
             set replace=!pluginPath!
             set "replace=!replace:VERSION=%%v!"
             set "replace=!replace:PLATFORM=win64!"
-            echo plug-ins: !replace! >> %1
+            echo plug-ins: !replace! >> "%fileName%"
         )
         if "!scriptPath!" neq "" (
-            echo scripts: !scriptPath! >> %1
+            echo scripts: !scriptPath! >> "%fileName%"
         )
         for /l %%n in (0,1,!customCount!) do (
             set replace=!customPath[%%n]!
             set "replace=!replace:VERSION=%%v!"
-            echo !replace! >> %1
+            echo !replace! >> "%fileName%"
         )
-        echo. >> %1
+        echo. >> "%fileName%"
     )
 ) else (
-    echo + !name! !pluginVersion! !modulePath!\!name! >> %1
+    echo + !name! !pluginVersion! !pathString! >> "%fileName%"
     if "!iconPath!" neq "" (
-        echo icons: !iconPath! >> %1
+        echo icons: !iconPath! >> "%fileName%"
     )
     if "!pluginPath!" neq "" (
         set replace=!pluginPath!
         set "replace=!replace:VERSION=%%v!"
         set "replace=!replace:PLATFORM=win64!"
-        echo plug-ins: !replace! >> %1
+        echo plug-ins: !replace! >> "%fileName%"
     )
     if "!scriptPath!" neq "" (
-        echo scripts: !scriptPath! >> %1
+        echo scripts: !scriptPath! >> "%fileName%"
     )
     for /l %%n in (0,1,!customCount!) do (
         set replace=!customPath[%%n]!
         set "replace=!replace:VERSION=%%v!"
-        echo !replace! >> %1
+        echo !replace! >> "%fileName%"
     )
 )
-call :logStatus "Finished writing module file : %1"
+call :logStatus "Finished writing module file : %fileName%"
 goto :eof
 
 
 :getBackupPath
 set fullPath=%1
 set fullPath=%fullPath::=§%
-set fullPath=%fullPath: =:%
+set fullPath=%fullPath: =$%
 set fullPath=%fullPath:\= %
 set count=0
 for %%i in (%fullPath%) do (
@@ -905,8 +1040,8 @@ for %%i in (%fullPath%) do (
     )
     set /a index+=1
 )
-set backupPath=%backupPath::= %
-set backupPath=%backupPath:§=:%
+set backupPath=!backupPath:$= !
+set backupPath=!backupPath:§=:!
 goto :eof
 
 

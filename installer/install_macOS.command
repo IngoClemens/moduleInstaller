@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------
 
 copyright="Copyright (c) 2019 Ingo Clemens, brave rabbit"
-installerVersion=0.6.0-190320
+installerVersion=0.7.0-190326
 
 # The name automatically gets defined throught the name of the module.
 name=""
@@ -36,7 +36,7 @@ then
     osType=linux64
     configExt=LINUX
     declare -a factoryPath=("/usr/autodesk/mayaVERSION/modules" "/root/maya/VERSION/modules" "/root/maya/modules" "/usr/autodesk/modules/maya/VERSION" "/usr/autodesk/modules/maya" "/home/$SUDO_USER/maya/modules" "/home/$SUDO_USER/maya/VERSION/modules")
-    customPathFile=/var/tmp/moduleInstaller
+    installPathFile=/var/tmp/moduleInstaller
 # macOS
 elif [[ "$OSTYPE" == "darwin"* ]]
 then
@@ -44,8 +44,10 @@ then
     osType=macOS
     configExt=MACOS
     declare -a factoryPath=("/Applications/Autodesk/mayaVERSION/Maya.app/Contents/modules" "/Users/$USER/Library/Preferences/Autodesk/maya/VERSION/modules" "/Users/$USER/Library/Preferences/Autodesk/maya/modules" "/Users/Shared/Autodesk/modules/maya/VERSION" "/Users/Shared/Autodesk/modules/maya")
-    customPathFile=/var/tmp/moduleInstaller
+    installPathFile=/var/tmp/moduleInstaller
 fi
+
+declare -a installPathList=(${modulePath})
 
 
 # ----------------------------------------------------------------------
@@ -93,7 +95,8 @@ logStatus()
 finishInstall()
 {
     echo
-    echo "Installation log saved to: ${logfile}"
+    echo "${BOLD}Installation log saved to:${NORMAL}"
+    echo "${logfile}"
     echo
     echo "----------------------- ${BOLD}${GREEN}Installation complete${NORMAL} ------------------------"
     echo
@@ -111,7 +114,8 @@ finishInstall()
 cancelInstall()
 {
     echo
-    echo "Installation log saved to: ${logfile}"
+    echo "${BOLD}Installation log saved to:${NORMAL}"
+    echo "${logfile}"
     echo
     echo "----------------------- ${BOLD}${RED}Installation cancelled${NORMAL} ------------------------"
     echo
@@ -326,14 +330,18 @@ fi
 # Check if the file exists which contains all previously used custom
 # install paths. Add all previous paths to the factory path array to
 # search for previous installations.
-customPathFileExists=0
-if [ -e $customPathFile ]
+# Also, create a list of all custom install paths to be able to give
+# the user an option to choose from previously used paths during the
+# custom installation.
+installPathFileExists=0
+if [ -e $installPathFile ]
 then
     while read line
     do
         factoryPath=("${factoryPath[@]}" "${line}")
-    done < $customPathFile
-    customPathFileExists=1
+        installPathList=("${installPathList[@]}" "${line}")
+    done < $installPathFile
+    installPathFileExists=1
 fi
 
 logStatus "MAYA_APP_DIR : $MAYA_APP_DIR"
@@ -409,7 +417,7 @@ logStatus "Module has plug-in : $includePlugin"
 # doesn't get accepted.
 
 validEntry=0
-echo "${BOLD}This program installs the $name plug-in for Autodesk Maya.${NORMAL}"
+echo "${BOLD}This program installs $name for Autodesk Maya.${NORMAL}"
 echo
 while [[ $validEntry == 0 ]]
 do
@@ -453,6 +461,8 @@ then
         then
             cancelInstall
         fi
+
+        echo
     fi
 else
     cancelInstall
@@ -465,7 +475,6 @@ fi
 # The path the module file is saved to.
 moduleFilePath=""
 
-echo
 echo
 echo "${BOLD}Installation type:${NORMAL}"
 echo "${BOLD}    1. Simple${NORMAL}"
@@ -520,26 +529,29 @@ do
     for path in "${factoryPath[@]}"
     do
         # Replace the version placeholder.
-        modPath=${path/VERSION/$version}
+        modPath="${path/VERSION/$version}"
 
         logStatus "Searching default path : $modPath"
 
         # Check if the current path already has been processed in case
         # of non version specific paths.
         processed=0
-        for item in $(echo $visitedPaths | tr ";" "\n")
+        IFS=";"
+        read -ra visitedElements <<< "$visitedPaths"
+        for item in "${visitedElements[@]}"
         do
-            if [ $item == $modPath ]
+            if [ "$item" == "$modPath" ]
             then
                 processed=1
             fi
         done
+        unset IFS
 
         # Check if the module exists in one of the default locations.
         modFile=${modPath}/$name.mod
-        if [ -e $modFile -a $processed -eq 0 ]
+        if [ -e "$modFile" -a $processed -eq 0 ]
         then
-            logStatus "Existing module file : $modFile"
+            logStatus "Found existing module file : $modFile"
             # Check where the module file points to.
             # Get the content of the .mod file and parse the first line.
             # The last item is the location of the module folder.
@@ -547,7 +559,7 @@ do
             do
                 content=$line
                 break
-            done < $modFile
+            done < "$modFile"
             items=($content)
             logStatus "First line in module : $line"
 
@@ -665,7 +677,7 @@ do
                 fi
             fi
 
-            visitedPaths+=$modPath";"
+            visitedPaths+="$modPath;"
         fi
     done
 done
@@ -683,6 +695,15 @@ fi
 # setup the module content path
 # ----------------------------------------------------------------------
 
+# If the custom install option has been chosen check if previous user
+# defined paths have been saved. In this case use the first stored path
+# as the default path for the installation.
+if [ $installPathFileExists == 1 -a "${#installPathList[@]}" -gt 0 -a "${installOption}" == 2 ]
+then
+    modulePath="${installPathList[0]}"
+    logStatus "Module path using stored custom path : $modulePath"
+fi
+
 if [ ! "${installOption}" == 4 ]
 then
     echo "${BOLD}The module will be installed in:${NORMAL}"
@@ -695,6 +716,7 @@ if [ "${installOption}" == 1 ]
 then
     if [ "${doDelete}" == 1 ]
     then
+        echo
         echo "${BOLD}A previous installation has been detected and will be deleted.${NORMAL}"
     fi
 
@@ -734,56 +756,91 @@ then
 
     if [ "${input}" == "n" -o "${input}" == "N" ]
     then
-        echo
-        read -p "${BOLD}Please enter a custom install path: ${NORMAL}" input
-        userDefinedPath=$input
-        if [ "${input}" != "" ]
+        needsPathInput=1
+
+        # In case the file exists which contains the previous install
+        # paths display these as a list the user can choose from.
+        if [ $installPathFileExists == 1 ]
         then
-            logStatus "User defined install path : $userDefinedPath"
-            # Check if the entered path is valid
-            if [ ! -d $input ]
-            then
-                echo
-                echo "${BOLD}The path does not exist.${NORMAL}"
-                echo
-
-                validEntry=0
-                while [[ $validEntry == 0 ]]
-                do
-                    read -p "${BOLD}Do you want to create it? [y/n]: ${NORMAL}" input
-                    validEntry=$(verifyInput $input)
-                    if [[ $validEntry == 0 ]]
-                    then
-                        wrongInput
-                    fi
-                done
-
-                if [ "${input}" == "y" -o "${input}" == "Y" ]
-                then
-                    mkdir -p $userDefinedPath
-                    logStatus "Created folder : $userDefinedPath"
-                else
-                    echo
-                    echo "${BOLD}${RED}Error:${BLACK} No valid path provided for the installation.${NORMAL}"
-                    logStatus "Error: No valid path provided for the installation."
-                    cancelInstall
-                fi
-            fi
-            modulePath=$userDefinedPath
-
-            # Add the new path the custom path file for later reference.
-            if [ $customPathFileExists == 1 ]
-            then
-                echo -e "$userDefinedPath" >> "$customPathFile"
-            else
-                echo -e "$userDefinedPath" > "$customPathFile"
-            fi
-            logStatus "Added user defined path $userDefinedPath to $customPathFile"
-        else
             echo
-            echo "${BOLD}${RED}Error:${BLACK} No path provided for the installation.${NORMAL}"
-            logStatus "Error: No path provided for the installation."
-            cancelInstall
+            echo "${BOLD}Previous install paths:${NORMAL}"
+            count=1
+            for path in "${installPathList[@]}"
+            do
+                echo "${BOLD}    $count. ${path}${NORMAL}"
+                count=$((count+1))
+            done
+            echo "${BOLD}    $count. New path${NORMAL}"
+            echo
+            read -p "${BOLD}Please enter choice [1-$count]: ${NORMAL}" input
+
+            if [ $input -lt $count ]
+            then
+                index=$input-1
+                modulePath=${installPathList[$index]}
+                logStatus "User defined install path : ${installPathList[$index]}"
+                needsPathInput=0
+            elif [ $input == $count ]
+            then
+                needsPathInput=1
+            else
+                cancelInstall
+            fi
+        fi
+
+        if [ $needsPathInput == 1 ]
+        then
+            echo
+            read -p "${BOLD}Please enter a custom install path: ${NORMAL}" input
+            userDefinedPath=$input
+            if [ "${input}" != "" ]
+            then
+                logStatus "User defined install path : $userDefinedPath"
+                # Check if the entered path is valid
+                if [ ! -d $input ]
+                then
+                    echo
+                    echo "${BOLD}The path does not exist.${NORMAL}"
+                    echo
+
+                    validEntry=0
+                    while [[ $validEntry == 0 ]]
+                    do
+                        read -p "${BOLD}Do you want to create it? [y/n]: ${NORMAL}" input
+                        validEntry=$(verifyInput $input)
+                        if [[ $validEntry == 0 ]]
+                        then
+                            wrongInput
+                        fi
+                    done
+
+                    if [ "${input}" == "y" -o "${input}" == "Y" ]
+                    then
+                        mkdir -p $userDefinedPath
+                        logStatus "Created folder : $userDefinedPath"
+                    else
+                        echo
+                        echo "${BOLD}${RED}Error:${BLACK} No valid path provided for the installation.${NORMAL}"
+                        logStatus "Error: No valid path provided for the installation."
+                        cancelInstall
+                    fi
+                fi
+                modulePath=$userDefinedPath
+
+                # Add the new path the custom path file for later reference.
+                if [ $installPathFileExists == 1 ]
+                then
+                    echo -e "$userDefinedPath" >> "$installPathFile"
+                else
+                    echo -e "$userDefinedPath" > "$installPathFile"
+                fi
+                logStatus "Added user defined path $userDefinedPath to $installPathFile"
+            else
+                echo
+                echo "${BOLD}${RED}Error:${BLACK} No path provided for the installation.${NORMAL}"
+                logStatus "Error: No path provided for the installation."
+                cancelInstall
+            fi
         fi
     fi
 fi
@@ -817,59 +874,94 @@ then
 
     if [ "${input}" == "n" -o "${input}" == "N" ]
     then
-        echo
-        read -p "${BOLD}Please enter a custom path for the module file: ${NORMAL}" input
-        userDefinedModuleFilePath=$input
-        if [ "${input}" != "" ]
+        needsPathInput=1
+
+        # In case the file exists which contains the previous install
+        # paths display these as a list the user can choose from.
+        if [ $installPathFileExists == 1 ]
         then
-            logStatus "User defined module file path : $userDefinedModuleFilePath"
-            # Check if the entered path is valid
-            if [ ! -d $input ]
-            then
-                echo
-                echo "${BOLD}The path does not exist.${NORMAL}"
-                echo
-
-                validEntry=0
-                while [[ $validEntry == 0 ]]
-                do
-                    read -p "${BOLD}Do you want to create it? [y/n]: ${NORMAL}" input
-                    validEntry=$(verifyInput $input)
-                    if [[ $validEntry == 0 ]]
-                    then
-                        wrongInput
-                    fi
-                done
-
-                if [ "${input}" == "y" -o "${input}" == "Y" ]
-                then
-                    mkdir -p $userDefinedModuleFilePath
-                    logStatus "Created folder : $userDefinedModuleFilePath"
-                else
-                    echo
-                    echo "${BOLD}${RED}Error:${BLACK} No valid module file path provided for the installation.${NORMAL}"
-                    logStatus "Error: No valid module file path provided for the installation."
-                    cancelInstall
-                fi
-            fi
-            moduleFilePath=$userDefinedModuleFilePath
-
-            if [ $modulePath != $moduleFilePath ]
-            then
-                # Add the new path the custom path file for later reference.
-                if [ $customPathFileExists == 1 ]
-                then
-                    echo -e "$userDefinedPath" >> "$customPathFile"
-                else
-                    echo -e "$userDefinedPath" > "$customPathFile"
-                fi
-                logStatus "Added user defined path $userDefinedPath to $customPathFile"
-            fi
-        else
             echo
-            echo "${BOLD}${RED}Error:${BLACK} No module file path provided for the installation.${NORMAL}"
-            logStatus "Error: No module file path provided for the installation."
-            cancelInstall
+            echo "${BOLD}Previous install paths:${NORMAL}"
+            count=1
+            for path in "${installPathList[@]}"
+            do
+                echo "${BOLD}    $count. ${path}${NORMAL}"
+                count=$((count+1))
+            done
+            echo "${BOLD}    $count. New path${NORMAL}"
+            echo
+            read -p "${BOLD}Please enter choice [1-$count]: ${NORMAL}" input
+
+            if [ $input -lt $count ]
+            then
+                index=$input-1
+                moduleFilePath=${installPathList[$index]}
+                logStatus "User defined module file path : ${installPathList[$index]}"
+                needsPathInput=0
+            elif [ $input == $count ]
+            then
+                needsPathInput=1
+            else
+                cancelInstall
+            fi
+        fi
+
+        if [ $needsPathInput == 1 ]
+        then
+            echo
+            read -p "${BOLD}Please enter a custom path for the module file: ${NORMAL}" input
+            userDefinedModuleFilePath=$input
+            if [ "${input}" != "" ]
+            then
+                logStatus "User defined module file path : $userDefinedModuleFilePath"
+                # Check if the entered path is valid
+                if [ ! -d $input ]
+                then
+                    echo
+                    echo "${BOLD}The path does not exist.${NORMAL}"
+                    echo
+
+                    validEntry=0
+                    while [[ $validEntry == 0 ]]
+                    do
+                        read -p "${BOLD}Do you want to create it? [y/n]: ${NORMAL}" input
+                        validEntry=$(verifyInput $input)
+                        if [[ $validEntry == 0 ]]
+                        then
+                            wrongInput
+                        fi
+                    done
+
+                    if [ "${input}" == "y" -o "${input}" == "Y" ]
+                    then
+                        mkdir -p $userDefinedModuleFilePath
+                        logStatus "Created folder : $userDefinedModuleFilePath"
+                    else
+                        echo
+                        echo "${BOLD}${RED}Error:${BLACK} No valid module file path provided for the installation.${NORMAL}"
+                        logStatus "Error: No valid module file path provided for the installation."
+                        cancelInstall
+                    fi
+                fi
+                moduleFilePath=$userDefinedModuleFilePath
+
+                if [ $modulePath != $moduleFilePath ]
+                then
+                    # Add the new path the custom path file for later reference.
+                    if [ $installPathFileExists == 1 ]
+                    then
+                        echo -e "$userDefinedModuleFilePath" >> "$installPathFile"
+                    else
+                        echo -e "$userDefinedModuleFilePath" > "$installPathFile"
+                    fi
+                    logStatus "Added user defined path $userDefinedModuleFilePath to $installPathFile"
+                fi
+            else
+                echo
+                echo "${BOLD}${RED}Error:${BLACK} No module file path provided for the installation.${NORMAL}"
+                logStatus "Error: No module file path provided for the installation."
+                cancelInstall
+            fi
         fi
     fi
 fi
@@ -921,9 +1013,20 @@ fi
 
 mkdir -p "$moduleFilePath/"
 logStatus "Using module path : $moduleFilePath"
+
+echo
+echo "${BOLD}${BLUE}Writing module file...${NORMAL}"
+
 writeModuleFile "$moduleFilePath/$name.mod"
 
+echo "${BOLD}${BLUE}... Done${NORMAL}"
+
+echo
+echo "${BOLD}${BLUE}Copying files...${NORMAL}"
+
 cp -r "$moduleBase" "$modulePath"
+
+echo "${BOLD}${BLUE}... Done${NORMAL}"
 
 # Fix any folder and file permissions.
 chmod -R 755 "$moduleFilePath/$name.mod"

@@ -23,14 +23,14 @@ After defining the specific paths for the module in the module.cfg file the inst
     - The **module.cfg** file must be present at the same folder level as the installer but is optional.
     - The module to be installed must be located within the **modules** folder which has to be present at the same folder level as the installer as well.
     - The license file with the name **LICENSE** also has to be present alongside the installer but is optional.
-    
+
 Folder structure:
 
     - LICENSE (optional)
     - module.cfg
     - installation script/s
     - modules/moduleName/moduleContent
-    
+
 See the folder structure in the sampleModule folder.
 
 This structure has been chosen to make the locations of the module and folders obvious even when the installer is not being used. The topmost modules folder should hint that a module usually always goes to a folder named 'modules' within the Maya search paths. Within the 'modules' folder is the module folder which carries the name of the module. The installer takes the name of this folder to execute the installation. The module folder itself contains all the elements for the module: icons, plug-ins, scripts. The installer checks for the existance of the plug-ins folder which triggers how the module is defined. Usually, when plug-ins are present, it's necessary to setup version dependent module definitions. If the plug-ins folder is missing only a general module gets defined which can be loaded by all versions of Maya.
@@ -46,14 +46,21 @@ This structure has been chosen to make the locations of the module and folders o
         - If creating a backup is declined the installation ends.
     - Display the path where the module will be installed.
     - Ask, if the provided path should be used.
+    - If an alternative path should be used display a list of previously used install paths. Also give the option to enter a new path.
     - In case of a custom path let the user provide a new path. This path also gets stored in a file located in the users temp directory.
     - Display the path where the module file will be installed.
     - Ask, if the provided path should be used.
+    - If an alternative path should be used display a list of previously used install paths. Also give the option to enter a new path.
     - In case of a custom path let the user provide a new path. This path also gets stored in a file located in the users temp directory.
     - Create the .mod file at the module path and copy the module files.
     - A log file gets created and saved in the same location as the installer.
 
 ## Changelog
+
+**0.7.0 (2019-03-26)**
+
+    - When choosing to install in a new location display a list of previously used paths.
+    - Use the first entry of the stored installation paths as the default install path.
 
 **0.6.0 (2019-03-20)**
 
