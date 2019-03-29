@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------
 
 copyright="Copyright (c) 2019 Ingo Clemens, brave rabbit"
-installerVersion=0.7.0-190326
+installerVersion=0.8.0-190329
 
 # The name automatically gets defined throught the name of the module.
 name=""
@@ -88,7 +88,7 @@ backupDir=""
 logStatus()
 {
     logtime=`date +%Y-%m-%d" "%H:%M:%S`
-    echo -e "<$logtime> : $1" >> $logfile
+    echo -e "<$logtime> : $1" >> "$logfile"
 }
 
 
@@ -294,7 +294,7 @@ currentDir=$(pwd)
 
 # Setup the log file.
 logfile=$currentDir/install.log
-echo > $logfile
+echo > "$logfile"
 logStatus "Begin installation"
 
 # ----------------------------------------------------------------------
@@ -367,15 +367,15 @@ echo
 # Check if the source files for the installation are present.
 # The installer must be located in the same folder as the modules folder
 # which has to contain the folder with the name of the module.
-sourceDir=$currentDir/modules
-if [ -e $sourceDir ]
+sourceDir="$currentDir/modules"
+if [ -e "$sourceDir" ]
 then
     # The modules folder has to contain one folder with the name of the
     # module.
     count=0
     for entry in "$sourceDir/"*
     do
-        name=$(basename $entry)
+        name=$(basename "$entry")
         count=$((count+1))
         logStatus "Source folder content : $name"
     done
@@ -398,11 +398,11 @@ fi
 
 logStatus "Module Name : $name"
 
-moduleBase=$sourceDir/$name
+moduleBase="$sourceDir/$name"
 logStatus "Module base path : $moduleBase"
 
 # Check if the module contains a plug-in folder.
-if [ -e $moduleBase/plug-ins ]
+if [ -e "$moduleBase/plug-ins" ]
 then
     includePlugin=1
 fi
@@ -479,7 +479,7 @@ echo
 echo "${BOLD}Installation type:${NORMAL}"
 echo "${BOLD}    1. Simple${NORMAL}"
 echo "${BOLD}    2. Custom (Additional options)${NORMAL}"
-echo "${BOLD}    3. Create module file only (Advanced setup)${NORMAL}"
+echo "${BOLD}    3. Create module file only (Manual setup)${NORMAL}"
 echo "${BOLD}    4. Uninstall${NORMAL}"
 echo "${BOLD}    5. Exit${NORMAL}"
 echo
@@ -493,7 +493,7 @@ then
 elif [ "${input}" == 3 ]
 then
     moduleFilePath=$currentDir/$name.mod
-    writeModuleFile $moduleFilePath
+    writeModuleFile "$moduleFilePath"
     echo
     echo "${BOLD}Module file saved to:${NORMAL}"
     echo $moduleFilePath

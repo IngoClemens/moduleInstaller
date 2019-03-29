@@ -8,7 +8,7 @@
 : ----------------------------------------------------------------------
 
 set copyright=Copyright (c) 2019 Ingo Clemens, brave rabbit
-set installerVersion=0.7.0-190326
+set installerVersion=0.8.0-190329
 
 :: The name automatically gets defined throught the name of the module.
 set name=
@@ -73,7 +73,7 @@ cd %currentDir%
 
 :: Setup the log file.
 set logfile=%currentDir%\install.log
-break > %logfile%
+break > "%logfile%"
 call :logStatus "Begin installation"
 
 :: ---------------------------------------------------------------------
@@ -146,12 +146,12 @@ echo.
 :: Check if the source files for the installation are present.
 :  The installer must be located in the same folder as the modules
 :  folder which has to contain the folder with the name of the module.
-set sourceDir=%currentDir%\modules
-if exist %sourceDir%\* (
+set "sourceDir=%currentDir%\modules"
+if exist "%sourceDir%"\* (
     :: The modules folder has to contain one folder with the name of
     :  the module.
     set count=0
-    for /d %%d in (%sourceDir%\*) do (
+    for /d %%d in ("%sourceDir%"\*) do (
         :: Get just the name of the folder.
         set name=%%~nd
         set /a count+=1
@@ -178,11 +178,11 @@ if exist %sourceDir%\* (
 set name=!name!
 call :logStatus "Module Name : %name%"
 
-set moduleBase=%sourceDir%\%name%
+set "moduleBase=%sourceDir%\%name%"
 call :logStatus "Module base path : %moduleBase%"
 
 :: Check if the module contains a plug-in folder.
-if exist %moduleBase%\plug-ins\* set includePlugin=1
+if exist "%moduleBase%"\plug-ins\* set includePlugin=1
 call :logStatus "Module has plug-in : %includePlugin%"
 
 :: ---------------------------------------------------------------------
@@ -252,7 +252,7 @@ echo.
 echo Installation type:
 echo    1. Simple
 echo    2. Custom (Additional options)
-echo    3. Create module file only (Advanced setup)
+echo    3. Create module file only (Manual setup)
 echo    4. Uninstall
 echo    5. Exit
 echo.
@@ -263,7 +263,11 @@ if !input! == 1 (
     set installOption=2
 ) else if !input! == 3 (
     set moduleFilePath=%currentDir%\%name%.mod
+    set moduleFilePath=!moduleFilePath: \=\!
+    set moduleFilePath=!moduleFilePath: =_!
     call :writeModuleFile !moduleFilePath!
+    :: Replace the underscore subsitution for the output.
+    set moduleFilePath=!moduleFilePath:_= !
     echo.
     echo Module file saved to:
     echo !moduleFilePath!
@@ -759,8 +763,7 @@ if %installOption% == 2 if %deleteOption% == 0 (
 :  ---------------------------------------------------------------------
 
 if %doDelete% == 1 (
-    echo.
-    del /s /q "!deleteFile!"
+    del /q "!deleteFile!"
     rmdir /s /q "!deleteDir!"
 
     echo.
@@ -776,8 +779,8 @@ if %doDelete% == 1 (
     :  -----------------------------------------------------------------
     if %doBackup% == 1 (
         md "!backupPath!"
-        xcopy /s "!backupDir!" "!backupPath!\%name%\"
-        move "!backupFile!" "!backupPath!"
+        xcopy /s "!backupDir!" "!backupPath!\%name%\" >NUL
+        move "!backupFile!" "!backupPath!" >NUL
 
         rmdir /s /q "!backupDir!"
 
@@ -818,8 +821,7 @@ echo Copying files...
 
 set modulePath=!modulePath!\%name%\
 set modulePath=!modulePath: \=\!
-echo.
-xcopy /s !moduleBase! "!modulePath!"
+xcopy /s "!moduleBase!" "!modulePath!" >NUL
 
 echo ... Done
 
@@ -1063,7 +1065,7 @@ goto :eof
 
 
 :logStatus
-echo %TIME% : %~1 >> %logfile%
+echo %TIME% : %~1 >> "%logfile%"
 goto :eof
 
 ENDLOCAL

@@ -20,9 +20,9 @@ The installation of the module can be customized with the module.cfg file and sh
 ## Setup
 After defining the specific paths for the module in the module.cfg file the installer works if the following requirements are met:
 
-    - The **module.cfg** file must be present at the same folder level as the installer but is optional.
+    - The module.cfg file must be present at the same folder level as the installer but is optional.
     - The module to be installed must be located within the **modules** folder which has to be present at the same folder level as the installer as well.
-    - The license file with the name **LICENSE** also has to be present alongside the installer but is optional.
+    - The license file with the name LICENSE also has to be present alongside the installer but is optional.
 
 Folder structure:
 
@@ -56,6 +56,10 @@ This structure has been chosen to make the locations of the module and folders o
     - A log file gets created and saved in the same location as the installer.
 
 ## Changelog
+
+**0.8.0 (2019-03-29)**
+
+    - Fixed issues with paths containing spaces.
 
 **0.7.0 (2019-03-26)**
 
