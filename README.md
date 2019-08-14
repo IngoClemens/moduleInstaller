@@ -9,21 +9,4 @@ If the module meets the basic requirements setting up the installer is mainly do
 
 See the [Wiki](https://github.com/IngoClemens/moduleInstaller/wiki) for full details.
 
-## Changelog
-
-**0.9.0 (2019-08-14)**
-
-    - Fixed an issue with paths containing underscores on windows.
-
-**0.8.0 (2019-03-29)**
-
-    - Fixed issues with paths containing spaces.
-
-**0.7.0 (2019-03-26)**
-
-    - When choosing to install in a new location display a list of previously used paths.
-    - Use the first entry of the stored installation paths as the default install path.
-
-**0.6.0 (2019-03-20)**
-
-    - Initial open source release.
+The _changelog_ can be found [here](https://github.com/IngoClemens/moduleInstaller/wiki/Changelog).
