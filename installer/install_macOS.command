@@ -8,7 +8,7 @@
 # ----------------------------------------------------------------------
 
 copyright="Copyright (c) 2019 Ingo Clemens, brave rabbit"
-installerVersion=0.8.0-190329
+installerVersion=0.9.0-190814
 
 # The name automatically gets defined throught the name of the module.
 name=""

@@ -57,6 +57,10 @@ This structure has been chosen to make the locations of the module and folders o
 
 ## Changelog
 
+**0.9.0 (2019-08-14)**
+
+    - Fixed an issue with paths containing underscores on windows.
+
 **0.8.0 (2019-03-29)**
 
     - Fixed issues with paths containing spaces.

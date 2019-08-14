@@ -8,7 +8,7 @@
 : ----------------------------------------------------------------------
 
 set copyright=Copyright (c) 2019 Ingo Clemens, brave rabbit
-set installerVersion=0.8.0-190329
+set installerVersion=0.9.0-190814
 
 :: The name automatically gets defined throught the name of the module.
 set name=
@@ -112,7 +112,7 @@ if exist %installPathFile% (
     for /f "tokens=* delims=" %%l in (%installPathFile%) do (
         set pathItem=%%l\
         set "pathItem=!pathItem: \=!"
-        set "pathItem=!pathItem: =_!"
+        set "pathItem=!pathItem: =§!"
         set factoryPath=!factoryPath!;!pathItem!
         set installPathList=!installPathList!;!pathItem!
         if !installPathListCount! == 0 (
@@ -264,10 +264,10 @@ if !input! == 1 (
 ) else if !input! == 3 (
     set moduleFilePath=%currentDir%\%name%.mod
     set moduleFilePath=!moduleFilePath: \=\!
-    set moduleFilePath=!moduleFilePath: =_!
+    set moduleFilePath=!moduleFilePath: =§!
     call :writeModuleFile !moduleFilePath!
-    :: Replace the underscore subsitution for the output.
-    set moduleFilePath=!moduleFilePath:_= !
+    :: Replace the section subsitution for the output.
+    set moduleFilePath=!moduleFilePath:§= !
     echo.
     echo Module file saved to:
     echo !moduleFilePath!
@@ -303,7 +303,7 @@ for %%v in (!mayaVersion!) do (
         set "modPath=!modPath:$VERSION=%%v!"
         set "modPath=!modPath:$USER=%USERNAME%!"
 
-        set "modPath=!modPath:_= !"
+        set "modPath=!modPath:§= !"
 
         call :logStatus "Searching default path : !modPath!"
 
@@ -312,7 +312,7 @@ for %%v in (!mayaVersion!) do (
         set processed=0
         for /f "tokens=* delims=;" %%i in ("!visitedPaths!") do (
             set visited=%%i
-            set "visited=!visited:_= !"
+            set "visited=!visited:§= !"
             if !visited! == !modPath! (
                 set processed=1
             )
@@ -472,7 +472,7 @@ for %%v in (!mayaVersion!) do (
             )
 
             set replacePath=!modPath!
-            set "replacePath=!replacePath: =_!"
+            set "replacePath=!replacePath: =§!"
             set visitedPaths=!visitedPaths!;!replacePath!
         )
     )
@@ -553,7 +553,7 @@ if %installOption% == 1 (
                 set count=1
                 for %%i in (!installPathList!) do (
                     set listItem=%%i
-                    set "listItem=!listItem:_= !"
+                    set "listItem=!listItem:§= !"
                     echo     !count!. !listItem!
                     set /a count+=1
                 )
@@ -566,7 +566,7 @@ if %installOption% == 1 (
                     for %%i in (!installPathList!) do (
                         if !count! == !input! (
                             set listItem=%%i
-                            set "listItem=!listItem:_= !"
+                            set "listItem=!listItem:§= !"
                             set modulePath=!listItem!
                             call :logStatus "User defined install path : !listItem!"
                             set needsPathInput=0
@@ -673,7 +673,7 @@ if %installOption% == 2 if %deleteOption% == 0 (
             set count=1
             for %%i in (!installPathList!) do (
                 set listItem=%%i
-                set "listItem=!listItem:_= !"
+                set "listItem=!listItem:§= !"
                 echo     !count!. !listItem!
                 set /a count+=1
             )
@@ -686,7 +686,7 @@ if %installOption% == 2 if %deleteOption% == 0 (
                 for %%i in (!installPathList!) do (
                     if !count! == !input! (
                         set listItem=%%i
-                        set "listItem=!listItem:_= !"
+                        set "listItem=!listItem:§= !"
                         set moduleFilePath=!listItem!
                         call :logStatus "User defined module file path : !listItem!"
                         set needsPathInput=0
@@ -811,7 +811,7 @@ echo Writing module file...
 
 set moduleFilePath=!moduleFilePath!\%name%.mod
 set moduleFilePath=!moduleFilePath: \=\!
-set moduleFilePath=!moduleFilePath: =_!
+set moduleFilePath=!moduleFilePath: =§!
 call :writeModuleFile !moduleFilePath!
 
 echo ... Done
@@ -967,7 +967,7 @@ goto :eof
 
 :writeModuleFile
 set fileName=%1
-set fileName=!fileName:_= !
+set fileName=!fileName:§= !
 call :logStatus "Begin writing module file : %fileName%"
 :: Clear the module file if it exists.
 break > "%fileName%"
